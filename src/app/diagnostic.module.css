@@ -1,0 +1,17 @@
+.diagnosticContainer {
+  padding: 20px;
+  font-family: monospace;
+}
+
+.diagnosticBox {
+  background: #f0f0f0;
+  padding: 10px;
+  border-radius: 5px;
+  margin: 10px 0;
+}
+
+.diagnosticWarning {
+  background: #fff0f0;
+  padding: 10px;
+  border-radius: 5px;
+}

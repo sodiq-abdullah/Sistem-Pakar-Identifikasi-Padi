@@ -133,6 +133,15 @@ Pastikan semua paket berikut terinstall:
 
 ## 🚀 Cara Menjalankan
 
+# 1. Hentikan dev server (Ctrl+C jika sedang jalan)
+
+# 2. Clear cache
+rmdir /s /q .next
+del -Force -Recurse .next (jika pakai PowerShell)
+
+# 3. Restart dev server
+npm run dev
+
 ### 1. **Development Mode** (Dengan Hot Reload)
 
 ```bash

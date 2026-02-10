@@ -35,12 +35,19 @@ export default function Home() {
     const initializeModel = async () => {
       try {
         setModelLoading(true);
+        setError(null);
+        console.log('Initializing AI model...');
+        
         const loadedModel = await loadTeachableMachineModel();
         setModel(loadedModel);
+        console.log('✓ AI model ready');
         setModelLoading(false);
       } catch (err) {
-        console.error('Failed to load model:', err);
-        setError('Gagal memuat model AI. Silakan refresh halaman.');
+        console.error('Model loading error:', err);
+        const errorMsg = err instanceof Error ? err.message : 'Model gagal dimuat';
+        setError(
+          `Gagal memuat model AI (${errorMsg}). Coba refresh halaman atau cek koneksi internet Anda.`
+        );
         setModelLoading(false);
       }
     };
@@ -63,12 +70,26 @@ export default function Home() {
       return;
     }
 
+    if (file.size > 10 * 1024 * 1024) {
+      setError('Ukuran file terlalu besar. Maksimal 10 MB.');
+      return;
+    }
+
     const reader = new FileReader();
     reader.onload = (e) => {
-      const result = e.target?.result as string;
-      setImagePreview(result);
-      setSelectedFile(file);
-      setError(null);
+      try {
+        const result = e.target?.result as string;
+        if (result) {
+          setSelectedFile(file);
+          setImagePreview(result);
+          setError(null);
+        }
+      } catch (error) {
+        setError('Gagal memproses gambar. Silakan coba lagi.');
+      }
+    };
+    reader.onerror = () => {
+      setError('Gagal membaca file. Silakan coba lagi.');
     };
     reader.readAsDataURL(file);
   };
@@ -91,20 +112,51 @@ export default function Home() {
     const files = event.dataTransfer.files;
     if (files && files[0]) {
       const file = files[0];
+
+      if (!file.type.startsWith('image/')) {
+        setError('Silakan pilih file gambar yang valid (JPG, PNG, dll)');
+        return;
+      }
+
+      if (file.size > 10 * 1024 * 1024) {
+        setError('Ukuran file terlalu besar. Maksimal 10 MB.');
+        return;
+      }
+
       const reader = new FileReader();
       reader.onload = (e) => {
-        const result = e.target?.result as string;
-        setImagePreview(result);
-        setSelectedFile(file);
-        setError(null);
+        try {
+          const result = e.target?.result as string;
+          if (result) {
+            setSelectedFile(file);
+            setImagePreview(result);
+            setError(null);
+          }
+        } catch (error) {
+          setError('Gagal memproses gambar. Silakan coba lagi.');
+        }
+      };
+      reader.onerror = () => {
+        setError('Gagal membaca file. Silakan coba lagi.');
       };
       reader.readAsDataURL(file);
     }
   };
 
   const handlePredict = async () => {
-    if (!imagePreview || !model) {
+    // Cek imagePreview dan selectedFile
+    if (!imagePreview) {
       setError('Silakan pilih gambar terlebih dahulu.');
+      return;
+    }
+
+    if (!selectedFile) {
+      setError('Data file tidak ditemukan. Silakan upload ulang gambar.');
+      return;
+    }
+
+    if (!model) {
+      setError('Model AI belum sepenuhnya dimuat. Silakan tunggu beberapa saat.');
       return;
     }
 
@@ -127,11 +179,11 @@ export default function Home() {
             setError(
               `Probabilitas prediksi rendah (${formatProbability(result.probability)}). Coba dengan gambar yang lebih jelas atau dari sudut berbeda.`
             );
+            setLoading(false);
           }
         } catch (err) {
           console.error('Prediction error:', err);
           setError('Terjadi kesalahan saat memprediksi gambar. Silakan coba lagi.');
-        } finally {
           setLoading(false);
         }
       };
@@ -206,7 +258,7 @@ export default function Home() {
             <h1 className="text-4xl md:text-5xl font-bold text-slate-900">
               Sistem Pakar Padi
             </h1>
-            <Zap className="w-10 h-10 text-yellow-500" />
+            {/* <Zap className="w-10 h-10 text-yellow-500" /> */}
           </div>
           <p className="text-lg text-slate-600 max-w-2xl mx-auto">
             Identifikasi Hama & Penyakit Tanaman Padi dengan Teknologi AI
@@ -214,7 +266,10 @@ export default function Home() {
           {modelLoading && (
             <div className="mt-4 flex items-center justify-center gap-2 text-blue-600 font-semibold">
               <Loader size={18} className="animate-spin" />
-              Memuat Model AI...
+              <div>
+                <p>Memuat Model AI...</p>
+                <p className="text-xs text-slate-500 mt-1">(File ~40 MB, dapat memakan waktu beberapa detik)</p>
+              </div>
             </div>
           )}
         </motion.div>
@@ -273,7 +328,15 @@ export default function Home() {
             >
               <div className="text-center">
                 <Loader className="w-12 h-12 animate-spin text-blue-600 mx-auto mb-4" />
-                <p className="text-slate-600">Mempersiapkan Sistem Pakar...</p>
+                <p className="text-slate-700 font-semibold mb-2">Mempersiapkan Sistem Pakar...</p>
+                <p className="text-slate-500 text-sm max-w-sm">
+                  Model AI sedang di-unduh (~40 MB). Ini hanya terjadi sekali dan bisa memakan waktu 10-30 detik tergantung koneksi internet Anda.
+                </p>
+                {error && (
+                  <div className="mt-4 text-red-600 text-sm bg-red-50 p-3 rounded-lg max-w-sm">
+                    {error}
+                  </div>
+                )}
               </div>
             </motion.div>
           ) : currentStep === 'upload' ? (
@@ -310,6 +373,8 @@ export default function Home() {
                     accept="image/*"
                     onChange={handleFileSelect}
                     className="hidden"
+                    aria-label="Unggah foto daun padi"
+                    title="Unggah foto daun padi"
                   />
                 </motion.div>
 

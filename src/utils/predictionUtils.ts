@@ -1,5 +1,22 @@
 import { UserAnswers } from '@/types';
 
+// Dynamic import untuk browser-only code
+let tmImageLoaded: any = null;
+
+async function getTmImage() {
+  if (tmImageLoaded) return tmImageLoaded;
+  
+  try {
+    // Import di runtime untuk browser
+    const module = await import('@teachablemachine/image');
+    tmImageLoaded = module;
+    return module;
+  } catch (error) {
+    console.error('Failed to import Teachable Machine:', error);
+    throw error;
+  }
+}
+
 // Hitung user score dari jawaban validasi (0-100)
 export const calculateUserScore = (answers: UserAnswers): number => {
   const totalScore = ((answers.question1 + answers.question2 + answers.question3) / 300) * 100;
@@ -65,20 +82,58 @@ export const getConfidenceLevelColor = (finalScore: number): string => {
   return 'text-red-600';
 };
 
-// Load Teachable Machine model
-export const loadTeachableMachineModel = async () => {
-  try {
-    const tmImage = (await import('@teachablemachine/image')).default;
-    const URL = '/model/';
-    const modelURL = URL + 'model.json';
-    const metadataURL = URL + 'metadata.json';
+// Load Teachable Machine model dengan retry logic
+export const loadTeachableMachineModel = async (maxRetries = 3) => {
+  let lastError: any;
 
-    const model = await tmImage.load(modelURL, metadataURL);
-    return model;
-  } catch (error) {
-    console.error('Error loading Teachable Machine model:', error);
-    throw error;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`Loading model (attempt ${attempt}/${maxRetries})...`);
+      
+      // Get Teachable Machine module
+      const tmImage = await getTmImage();
+      
+      if (!tmImage || !tmImage.load) {
+        throw new Error(`Teachable Machine module not properly loaded. Got: ${typeof tmImage}`);
+      }
+
+      // URL ke folder model
+      const URL = '/model/';
+      const modelURL = URL + 'model.json';
+      const metadataURL = URL + 'metadata.json';
+
+      console.log(`Fetching model from: ${modelURL}`);
+      console.log(`Fetching metadata from: ${metadataURL}`);
+
+      // Set a timeout for model loading
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Model loading timeout (60s exceeded)')), 60000)
+      );
+
+      // Load model dengan timeout
+      const modelPromise = tmImage.load(modelURL, metadataURL);
+      const model = await Promise.race([modelPromise, timeoutPromise]);
+      
+      console.log('✓ Model loaded successfully');
+      console.log('✓ Ready for predictions');
+      return model;
+    } catch (error) {
+      lastError = error;
+      console.error(`Attempt ${attempt} failed:`, error);
+      
+      if (attempt < maxRetries) {
+        const waitTime = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
+        console.log(`Retrying in ${waitTime}ms...`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      }
+    }
   }
+
+  const errorMessage = `Model failed to load after ${maxRetries} attempts: ${
+    lastError instanceof Error ? lastError.message : 'Unknown error'
+  }`;
+  console.error(errorMessage);
+  throw new Error(errorMessage);
 };
 
 // Predict image using Teachable Machine model
